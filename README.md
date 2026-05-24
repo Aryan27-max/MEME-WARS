@@ -14,7 +14,7 @@ The experience feels like:
 </h2>
 
 <div align="center">
-  <img src="https://skillicons.dev/icons?i=react,html,typescript,javascript,tailwind,nextjs" />
+  <img src="https://skillicons.dev/icons?i=react,html,typescript,javascript,tailwind,vercel,nextjs" />
 </div>
 
 
