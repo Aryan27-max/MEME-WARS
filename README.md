@@ -4,8 +4,19 @@ Welcome !! to **Gen'Z – Banter Box**, a high-energy, brutalist Neo-Memphis web
 
 The experience feels like:
 **Discord + Reddit + Canva + Instagram Stories + IPL Fan Culture**
-
 ---
+
+# PRD DOCUMENT - [CLICK ME !!](https://www.notion.so/Product-Requirements-Document-PRD-Gen-Z-Banter-Box-Roast-Meme-Rule-The-Match-1-Executive-3440249ff416801c9eacca332f9418bb?source=copy_link)
+
+<h2 align="left">
+  <img src="https://media2.giphy.com/media/QssGEmpkyEOhBCb7e1/giphy.gif" width="20px" height="20px">
+  Technologies
+</h2>
+
+<div align="center">
+  <img src="https://skillicons.dev/icons?i=react,html,tailwind,nextjs" />
+</div>
+
 
 ## ⚡ Tech Stack & Architecture
 - **Framework**: Next.js 16 (App Router) + React 19 + TypeScript
@@ -83,3 +94,4 @@ npm run build
 ```
 This runs TypeScript compiler checks and compiles Next.js pages to verify production-ready code.
 
+# MADE WITH ❤ BY [Aryan27-max](https://github.com/Aryan27-max)
