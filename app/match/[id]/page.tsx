@@ -113,6 +113,9 @@ export default function MatchRoomPage() {
   const [composerText, setComposerText] = useState("");
   const [activeTab, setActiveTab] = useState<"MEMES" | "CHAT">("MEMES");
   
+  // Mobile tab selectors
+  const [mobileViewTab, setMobileViewTab] = useState<"feed" | "stats" | "tools">("feed");
+
   // Custom cheered notice
   const [floatingNotification, setFloatingNotification] = useState<string | null>(null);
 
@@ -121,12 +124,10 @@ export default function MatchRoomPage() {
     const preloaded = PRELOADED_MEMES[id] || PRELOADED_MEMES["rcb-csk"];
     const posts = PRELOADED_POSTS[id] || PRELOADED_POSTS["rcb-csk"];
     
-    // Retrieve studio generated memes from localStorage
     try {
       const storedMemeStr = localStorage.getItem("genz_studio_memes");
       if (storedMemeStr) {
         const storedMemes = JSON.parse(storedMemeStr) as MemeData[];
-        // Filter memes belonging to this match
         const matchMemes = storedMemes.filter((m: any) => m.matchId === id || (!m.matchId && id === "rcb-csk"));
         setMemes([...matchMemes, ...preloaded]);
       } else {
@@ -156,11 +157,10 @@ export default function MatchRoomPage() {
       };
       setFeedPosts([newPost, ...feedPosts]);
     } else {
-      // Create a text-only mock meme card
       const newMeme: MemeData = {
         id: `custom-meme-${Date.now()}`,
         creator: { username: "MemeLord_GZ", clan: "neutral", level: 1 },
-        imageUrl: "/patterns/black_white.png", // Use geometric bg for text-memes
+        imageUrl: "/patterns/black_white.png",
         caption: composerText,
         tags: ["CustomBanter", "BanterBox"],
         upvotes: 1,
@@ -179,11 +179,10 @@ export default function MatchRoomPage() {
     setTimeout(() => setFloatingNotification(null), 1500);
   };
 
-  // Setup header title based on match ID
   const getMatchTitle = () => {
-    if (id === "kkr-srh") return "KKR VS SRH | KNIGHTS VS EAGLES";
+    if (id === "kkr-srh") return "KKR VS SRH | EAGLES VS KNIGHTS";
     if (id === "mi-gt") return "MI VS GT | PALTAN VS TITANS";
-    return "RCB VS CSK | EL CLASICO BANTER";
+    return "RCB VS CSK | EL CLASICO ARENA";
   };
 
   return (
@@ -234,16 +233,35 @@ export default function MatchRoomPage() {
         </nav>
       </header>
 
+      {/* Mobile viewport navigation tab-bar (Visible below lg) */}
+      <div className="lg:hidden flex border-b-4 border-black bg-white select-none sticky top-0 z-30 mb-4 mx-6 memphis-border">
+        {["FEED", "STATS", "TOOLS"].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setMobileViewTab(tab.toLowerCase() as any)}
+            className={`flex-1 py-3 text-center font-bangers text-lg tracking-wider border-r border-black last:border-r-0 active:bg-zinc-50 ${
+              mobileViewTab === tab.toLowerCase() ? "bg-[#ffe400] text-black" : "bg-white"
+            }`}
+          >
+            {tab === "FEED" ? "🥊 FEED" : tab === "STATS" ? "📊 STATS" : "⚡ TOOLS"}
+          </button>
+        ))}
+      </div>
+
       {/* Main Grid: 3 Column Layout */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-4 grid grid-cols-1 lg:grid-cols-4 gap-8 z-10">
         
-        {/* Left Column (Match stats & Online) - 1 Col span */}
-        <div className="lg:col-span-1 flex flex-col gap-6">
+        {/* Left Column (Match stats & Online) - 1 Col span, hidden on mobile unless in stats tab */}
+        <div className={`lg:col-span-1 flex flex-col gap-6 ${
+          mobileViewTab === "stats" ? "flex" : "hidden lg:flex"
+        }`}>
           <Sidebar type="left" matchId={id} onCheer={handleCheerEvent} />
         </div>
 
-        {/* Center Column (Meme & Chat feeds) - 2 Col span */}
-        <div className="lg:col-span-2 flex flex-col gap-6">
+        {/* Center Column (Meme & Chat feeds) - 2 Col span, hidden on mobile unless in feed tab */}
+        <div className={`lg:col-span-2 flex flex-col gap-6 ${
+          mobileViewTab === "feed" ? "flex" : "hidden lg:flex"
+        }`}>
           
           {/* Feed Header and Tabs */}
           <div className="memphis-border bg-white p-4 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3.5 memphis-shadow-sm">
@@ -257,10 +275,10 @@ export default function MatchRoomPage() {
             </div>
 
             {/* Tab Toggles */}
-            <div className="flex gap-2.5 font-mono text-xs font-bold">
+            <div className="flex gap-2.5 font-mono text-xs font-bold mt-2 sm:mt-0">
               <button
                 onClick={() => setActiveTab("MEMES")}
-                className={`memphis-border-2 px-4.5 py-2 cursor-pointer select-none active:translate-y-[1px] ${
+                className={`flex-1 sm:flex-initial memphis-border-2 px-4.5 py-2 cursor-pointer select-none active:translate-y-[1px] ${
                   activeTab === "MEMES" ? "bg-[#ffe400] text-black" : "bg-white"
                 }`}
               >
@@ -268,7 +286,7 @@ export default function MatchRoomPage() {
               </button>
               <button
                 onClick={() => setActiveTab("CHAT")}
-                className={`memphis-border-2 px-4.5 py-2 cursor-pointer select-none active:translate-y-[1px] ${
+                className={`flex-1 sm:flex-initial memphis-border-2 px-4.5 py-2 cursor-pointer select-none active:translate-y-[1px] ${
                   activeTab === "CHAT" ? "bg-[#d200c1] text-white" : "bg-white"
                 }`}
               >
@@ -279,7 +297,7 @@ export default function MatchRoomPage() {
 
           {/* Composer Form Box */}
           <form onSubmit={handlePostBanter} className="memphis-border memphis-shadow-sm bg-white p-4 flex flex-col gap-3">
-            <div className="flex justify-between items-center border-b-2 border-black border-dashed pb-2">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b-2 border-black border-dashed pb-2">
               <span className="font-russo text-xs text-black">
                 {activeTab === "MEMES" ? "🖼️ DEPLOY QUICK TEXT MEME" : "💬 DRAFT SAUCE"}
               </span>
@@ -334,8 +352,10 @@ export default function MatchRoomPage() {
           </div>
         </div>
 
-        {/* Right Column (Trending Topics, AI Roaster, Templates) - 1 Col span */}
-        <div className="lg:col-span-1 flex flex-col gap-6">
+        {/* Right Column (Trending Topics, AI Roaster, Templates) - 1 Col span, hidden on mobile unless in tools tab */}
+        <div className={`lg:col-span-1 flex flex-col gap-6 ${
+          mobileViewTab === "tools" ? "flex" : "hidden lg:flex"
+        }`}>
           <Sidebar type="right" matchId={id} />
         </div>
 

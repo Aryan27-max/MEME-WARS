@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import PixelButton from "@/components/PixelButton";
 import StickerChip from "@/components/StickerChip";
@@ -74,6 +74,14 @@ export default function MemeStudioPage() {
   const [bgRemoved, setBgRemoved] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Mobile layout tab navigation state
+  const [mobileTab, setMobileTab] = useState<"tools" | "layers" | "properties" | "ai">("tools");
+
+  // Camera flow states
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
   // Initialize canvas layers
   useEffect(() => {
     setLayers([
@@ -124,6 +132,9 @@ export default function MemeStudioPage() {
 
   const handleSelectLayer = (id: string) => {
     setSelectedLayerId(id);
+    if (window.innerWidth < 1024) {
+      setMobileTab("properties");
+    }
   };
 
   const handleUpdateLayer = (updated: Partial<Layer>) => {
@@ -140,7 +151,7 @@ export default function MemeStudioPage() {
   };
 
   const handleDeleteLayer = (id: string) => {
-    if (id === "mascot-layer" || id === "bg-layer") return; // Keep core graphics
+    if (id === "mascot-layer" || id === "bg-layer") return;
     setLayers((prev) => prev.filter((lay) => lay.id !== id));
     if (selectedLayerId === id) setSelectedLayerId(null);
   };
@@ -198,10 +209,85 @@ export default function MemeStudioPage() {
     );
   };
 
+  // Live Camera controls
+  const startCamera = async () => {
+    setCameraActive(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+      });
+      setCameraStream(stream);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(e => console.error(e));
+        }
+      }, 300);
+    } catch (err) {
+      console.error("Camera access denied:", err);
+      alert("Could not load webcam stream. Fall back to upload file instead.");
+      setCameraActive(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
+    }
+    setCameraActive(false);
+  };
+
+  const takeSnapshot = () => {
+    if (videoRef.current) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 480;
+      canvas.height = 480;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        const video = videoRef.current;
+        const minDim = Math.min(video.videoWidth, video.videoHeight);
+        const sx = (video.videoWidth - minDim) / 2;
+        const sy = (video.videoHeight - minDim) / 2;
+        ctx.drawImage(video, sx, sy, minDim, minDim, 0, 0, 480, 480);
+        const dataUrl = canvas.toDataURL("image/png");
+
+        setLayers((prev) =>
+          prev.map((lay) =>
+            lay.id === "mascot-layer"
+              ? { ...lay, content: dataUrl, name: "Captured Photo" }
+              : lay
+          )
+        );
+        setSelectedLayerId("mascot-layer");
+      }
+    }
+    stopCamera();
+  };
+
+  const handleCameraFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          setLayers((prev) =>
+            prev.map((lay) =>
+              lay.id === "mascot-layer"
+                ? { ...lay, content: reader.result as string, name: "Photo Capture" }
+                : lay
+            )
+          );
+          setSelectedLayerId("mascot-layer");
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   // AI Buttons triggers
   const handleAIGenerateCaption = () => {
     const randomCap = MOCK_AI_CAPTIONS[Math.floor(Math.random() * MOCK_AI_CAPTIONS.length)];
-    // Update bottom text
     setLayers((prev) =>
       prev.map((lay) =>
         lay.id === "bottom-text" ? { ...lay, content: randomCap.toUpperCase() } : lay
@@ -212,7 +298,6 @@ export default function MemeStudioPage() {
 
   const handleAIGenerateRoast = () => {
     const randomRoast = MOCK_AI_ROASTS[Math.floor(Math.random() * MOCK_AI_ROASTS.length)];
-    // Update top text
     setLayers((prev) =>
       prev.map((lay) =>
         lay.id === "top-text" ? { ...lay, content: randomRoast.toUpperCase() } : lay
@@ -222,7 +307,6 @@ export default function MemeStudioPage() {
   };
 
   const handleAIMemeGenerator = () => {
-    // Randomize background, mascot, and text
     const randMascot = TEMPLATE_MASCOTS[Math.floor(Math.random() * TEMPLATE_MASCOTS.length)];
     const randPattern = PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
     const randCap = MOCK_AI_CAPTIONS[Math.floor(Math.random() * MOCK_AI_CAPTIONS.length)];
@@ -241,15 +325,14 @@ export default function MemeStudioPage() {
   };
 
   const handlePostToMatch = () => {
-    // Generate meme image post
     const topVal = layers.find((l) => l.id === "top-text")?.content || "";
     const bottomVal = layers.find((l) => l.id === "bottom-text")?.content || "";
     
     const newMemeObj = {
       id: `studio-meme-${Date.now()}`,
-      matchId: "rcb-csk", // deploy to RCB-CSK feed
+      matchId: "rcb-csk",
       creator: { username: "MemeLord_GZ", clan: activeMascotId as any, level: 14 },
-      imageUrl: PATTERNS[activePatternIdx].value, // backing image
+      imageUrl: PATTERNS[activePatternIdx].value,
       caption: `${topVal} ${bottomVal}`.trim() || "Gen'Z Banter custom creation!",
       tags: ["MemeStudio", "SavageRoast", activeMascotId.toUpperCase()],
       upvotes: 24,
@@ -279,6 +362,40 @@ export default function MemeStudioPage() {
       {successMsg && (
         <div className="fixed top-8 left-1/2 -translate-x-1/2 z-50 animate-bounce bg-[#ffe400] text-black font-bangers text-xl sm:text-2xl px-6 py-2.5 memphis-border shadow-[4px_4px_0px_#000] tracking-wider select-none text-center">
           {successMsg}
+        </div>
+      )}
+
+      {/* Live Camera Dialog Modal */}
+      {cameraActive && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <RetroWindow
+            title="📷 SNAPSHOT AREA"
+            headerBg="bg-[#d200c1] text-white"
+            className="max-w-md w-full relative z-50 memphis-shadow-pink"
+            onClose={stopCamera}
+          >
+            <div className="p-4 bg-white flex flex-col items-center gap-4">
+              <div className="w-full aspect-square border-4 border-black bg-zinc-950 overflow-hidden relative">
+                <video
+                  ref={videoRef}
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  playsInline
+                  muted
+                />
+                <div className="absolute inset-0 border border-white/20 pointer-events-none" />
+              </div>
+              
+              <div className="flex gap-2.5 w-full">
+                <PixelButton variant="secondary" size="md" className="flex-1" onClick={takeSnapshot}>
+                  TAKE SNAPSHOT 📸
+                </PixelButton>
+                <PixelButton variant="white" size="md" onClick={stopCamera}>
+                  CANCEL
+                </PixelButton>
+              </div>
+            </div>
+          </RetroWindow>
         </div>
       )}
 
@@ -321,7 +438,7 @@ export default function MemeStudioPage() {
       </header>
 
       {/* Main Studio Workspace */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-4 grid grid-cols-1 lg:grid-cols-12 gap-8 z-10">
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-4 grid grid-cols-1 lg:grid-cols-12 gap-6 z-10">
         
         {/* Title row (12 columns) */}
         <div className="lg:col-span-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
@@ -329,181 +446,61 @@ export default function MemeStudioPage() {
             <div className="flex items-center gap-2">
               <StickerChip label="MEME CREATOR WORKSPACE" color="yellow" rotation="rotate-[2deg]" />
             </div>
-            <h2 className="font-russo text-3xl sm:text-4xl text-black uppercase leading-none">
+            <h2 className="font-russo text-3xl sm:text-4xl text-black uppercase leading-none mt-1">
               CANVA MEME STUDIO
             </h2>
           </div>
           
-          <div className="flex gap-2">
-            <PixelButton variant="primary" size="sm" onClick={handleAIMemeGenerator}>
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+            <PixelButton variant="primary" size="sm" className="flex-1 sm:flex-initial" onClick={handleAIMemeGenerator}>
               AI RANDOMIZE 🪄
             </PixelButton>
-            <PixelButton variant="secondary" size="sm" onClick={handlePostToMatch} glow>
+            <PixelButton variant="secondary" size="sm" className="flex-1 sm:flex-initial" onClick={handlePostToMatch} glow>
               POST TO MATCH FEED 🚀
             </PixelButton>
           </div>
         </div>
 
-        {/* LEFT COLUMN: Tool Panel & Layers (lg:col-span-3) */}
-        <div className="lg:col-span-3 flex flex-col gap-6">
-          
-          {/* Tool Panel window */}
-          <RetroWindow title="DESIGN TOOLS" headerBg="bg-primary-container" showDots={false}>
-            <div className="p-4 bg-white flex flex-col gap-4">
-              {/* Add Layer Actions */}
-              <div>
-                <span className="font-mono text-[10px] font-bold text-black/60 uppercase block mb-2">ADD ELEMENT:</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <PixelButton variant="white" size="sm" className="text-sm! py-1.5" onClick={handleAddText}>
-                    ➕ ADD TEXT
-                  </PixelButton>
-                  <div className="relative group">
-                    <PixelButton variant="white" size="sm" className="w-full text-sm! py-1.5">
-                      ➕ STICKER
-                    </PixelButton>
-                    {/* Emoji dropdown on hover */}
-                    <div className="absolute top-full left-0 right-0 bg-white memphis-border-2 p-1.5 hidden group-hover:grid grid-cols-3 gap-1 z-30 shadow-md">
-                      {STICKERS.map((st) => (
-                        <button
-                          key={st.name}
-                          type="button"
-                          onClick={() => handleAddSticker(st.emoji)}
-                          className="hover:bg-[#ffe400] text-center text-lg p-1"
-                        >
-                          {st.emoji}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Background patterns picker */}
-              <div>
-                <span className="font-mono text-[10px] font-bold text-black/60 uppercase block mb-2">BACKGROUND PATTERN:</span>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {PATTERNS.map((p, idx) => (
-                    <button
-                      key={p.name}
-                      onClick={() => handleSelectPattern(p, idx)}
-                      className={`h-9 border-2 border-black relative transition-all bg-cover bg-center ${
-                        activePatternIdx === idx ? "scale-105 border-[#d200c1]" : "opacity-75 hover:opacity-100"
-                      }`}
-                      style={{ backgroundImage: `url(${p.value})` }}
-                      title={p.name}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Team Mascot Selector */}
-              <div>
-                <span className="font-mono text-[10px] font-bold text-black/60 uppercase block mb-2">CLAN MASCOT:</span>
-                <div className="flex gap-2">
-                  {TEMPLATE_MASCOTS.map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => handleSelectMascot(m)}
-                      className={`w-9 h-9 border-2 border-black rounded-full overflow-hidden relative bg-white transition-all ${
-                        activeMascotId === m.id ? "scale-110 border-[#ffe400] ring-2 ring-black" : "opacity-70 hover:opacity-100"
-                      }`}
-                      title={m.name}
-                    >
-                      <Image src={m.image} alt={m.name} fill className="object-contain p-0.5" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </RetroWindow>
-
-          {/* Layers Panel window */}
-          <RetroWindow title="LAYERS PANEL" headerBg="bg-secondary" className="memphis-shadow-pink">
-            <div className="bg-white p-3 divide-y-2 divide-black/10 max-h-52 overflow-y-auto scrollbar-thin flex flex-col">
-              {layers.map((lay) => (
+        {/* MIDDLE COLUMN: Canvas Board Area (Pinned at top on mobile viewports) */}
+        <div className="lg:col-span-6 lg:order-2 flex flex-col gap-4 order-1">
+          <RetroWindow title="MEME CANVAS (1:1)" headerBg="bg-primary-container" bodyClassName="bg-zinc-950 p-4 flex items-center justify-center">
+            <div className="relative w-full aspect-square max-w-[420px] bg-white memphis-border overflow-hidden select-none">
+              {/* Background Pattern Layer */}
+              {layers.find((l) => l.id === "bg-layer")?.visible && (
                 <div
-                  key={lay.id}
-                  onClick={() => handleSelectLayer(lay.id)}
-                  className={`flex items-center justify-between py-2 px-1 cursor-pointer hover:bg-zinc-50 ${
-                    selectedLayerId === lay.id ? "bg-[#ffe400]/30 border border-black border-dashed" : ""
-                  }`}
+                  className="absolute inset-0 opacity-20 bg-repeat"
+                  style={{
+                    backgroundImage: `url(${layers.find((l) => l.id === "bg-layer")?.content})`,
+                    backgroundSize: "120px",
+                  }}
+                />
+              )}
+
+              {/* Grid guidelines */}
+              <div className="absolute inset-0 bg-grid-line opacity-[0.02] pointer-events-none" />
+
+              {/* Mascot Graphic Image Layer */}
+              {layers.find((l) => l.id === "mascot-layer")?.visible && (
+                <div
+                  className="absolute z-10 transition-all duration-300"
+                  style={{
+                    width: `${layers.find((l) => l.id === "mascot-layer")?.size}px`,
+                    height: `${layers.find((l) => l.id === "mascot-layer")?.size}px`,
+                    left: "50%",
+                    top: "50%",
+                    transform: `translate(-50%, -50%) translate(${layers.find((l) => l.id === "mascot-layer")?.x}px, ${layers.find((l) => l.id === "mascot-layer")?.y}px)`,
+                  }}
                 >
-                  <span className="font-mono text-xs font-bold truncate max-w-[140px] uppercase">
-                    {lay.type === "text" ? "📝" : lay.type === "sticker" ? "🕶️" : "🖼️"}{" "}
-                    {lay.name}
-                  </span>
-                  
-                  <div className="flex items-center gap-1.5">
-                    {/* Hide Button */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleVisibility(lay.id);
-                      }}
-                      className="text-xs hover:bg-[#b4ebff] p-0.5"
-                    >
-                      {lay.visible ? "👁️" : "🙈"}
-                    </button>
-                    {/* Delete button (except core mascot and bg) */}
-                    {lay.id !== "mascot-layer" && lay.id !== "bg-layer" && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteLayer(lay.id);
-                        }}
-                        className="text-xs text-live-red hover:bg-red-50 p-0.5"
-                      >
-                        🗑️
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </RetroWindow>
-        </div>
-
-        {/* MIDDLE COLUMN: Canvas Board Area (lg:col-span-6) */}
-        <div className="lg:col-span-6 flex flex-col gap-6">
-          <RetroWindow title="MEME CANVAS (1:1)" headerBg="bg-primary-container" bodyClassName="bg-zinc-950 p-4">
-            <div className="flex items-center justify-center w-full">
-              
-              {/* Canvas Wrapper Board */}
-              <div
-                id="meme-canvas-render"
-                className={`relative w-full aspect-square max-w-[420px] bg-white memphis-border overflow-hidden select-none ${
-                  enhanced ? "crt-screen crt-flicker neon-glow-pink" : ""
-                }`}
-              >
-                {/* Background Pattern Layer */}
-                {layers.find((l) => l.id === "bg-layer")?.visible && (
-                  <div
-                    className="absolute inset-0 opacity-20 bg-repeat"
-                    style={{
-                      backgroundImage: `url(${layers.find((l) => l.id === "bg-layer")?.content})`,
-                      backgroundSize: "120px",
-                    }}
-                  />
-                )}
-
-                {/* Grid guidelines */}
-                <div className="absolute inset-0 bg-grid-line opacity-[0.02] pointer-events-none" />
-
-                {/* Mascot Graphic Image Layer */}
-                {layers.find((l) => l.id === "mascot-layer")?.visible && (
-                  <div
-                    className="absolute z-10 transition-transform duration-300"
-                    style={{
-                      width: `${layers.find((l) => l.id === "mascot-layer")?.size}px`,
-                      height: `${layers.find((l) => l.id === "mascot-layer")?.size}px`,
-                      left: "50%",
-                      top: "50%",
-                      transform: `translate(-50%, -50%) translate(${layers.find((l) => l.id === "mascot-layer")?.x}px, ${layers.find((l) => l.id === "mascot-layer")?.y}px)`,
-                    }}
-                  >
-                    <div className="relative w-full h-full">
+                  <div className="relative w-full h-full">
+                    {layers.find((l) => l.id === "mascot-layer")?.content.startsWith("data:image") ? (
+                      <img
+                        src={layers.find((l) => l.id === "mascot-layer")?.content}
+                        alt="Canvas Snapshot"
+                        className={`w-full h-full object-contain ${
+                          bgRemoved ? "mix-blend-multiply" : "filter drop-shadow-[4px_4px_0px_rgba(0,0,0,0.8)]"
+                        }`}
+                      />
+                    ) : (
                       <Image
                         src={layers.find((l) => l.id === "mascot-layer")?.content || ""}
                         alt="Canvas Mascot"
@@ -512,71 +509,78 @@ export default function MemeStudioPage() {
                           bgRemoved ? "mix-blend-multiply" : "filter drop-shadow-[4px_4px_0px_rgba(0,0,0,0.8)]"
                         }`}
                       />
-                    </div>
+                    )}
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Dynamic custom layers: Text & Stickers */}
-                {layers.map((lay) => {
-                  if (!lay.visible || lay.type === "background" || lay.id === "mascot-layer") return null;
+              {/* Dynamic custom layers: Text & Stickers */}
+              {layers.map((lay) => {
+                if (!lay.visible || lay.type === "background" || lay.id === "mascot-layer") return null;
 
-                  if (lay.type === "text") {
-                    return (
-                      <div
-                        key={lay.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectLayer(lay.id);
-                        }}
-                        className={`absolute z-20 font-russo uppercase leading-tight text-center px-4 w-full cursor-pointer select-none ${
-                          selectedLayerId === lay.id ? "outline-2 outline-dashed outline-[#d200c1]" : ""
-                        }`}
-                        style={{
-                          left: "50%",
-                          top: "50%",
-                          transform: `translate(-50%, -50%) translate(${lay.x}px, ${lay.y}px) rotate(${lay.rotation}deg)`,
-                          color: lay.color,
-                          fontSize: `${lay.size}px`,
-                          textShadow: "2px 2px 0px #000000, -2px -2px 0px #000000, 2px -2px 0px #000000, -2px 2px 0px #000000",
-                        }}
-                      >
-                        {lay.content}
-                      </div>
-                    );
-                  }
+                if (lay.type === "text") {
+                  return (
+                    <div
+                      key={lay.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectLayer(lay.id);
+                      }}
+                      className={`absolute z-20 font-russo uppercase leading-tight text-center px-4 w-full cursor-pointer select-none ${
+                        selectedLayerId === lay.id ? "outline-2 outline-dashed outline-[#d200c1] bg-[#ffe400]/10" : ""
+                      }`}
+                      style={{
+                        left: "50%",
+                        top: "50%",
+                        transform: `translate(-50%, -50%) translate(${lay.x}px, ${lay.y}px) rotate(${lay.rotation}deg)`,
+                        color: lay.color,
+                        fontSize: `${lay.size}px`,
+                        textShadow: "2px 2px 0px #000000, -2px -2px 0px #000000, 2px -2px 0px #000000, -2px 2px 0px #000000",
+                      }}
+                    >
+                      {lay.content}
+                    </div>
+                  );
+                }
 
-                  if (lay.type === "sticker") {
-                    return (
-                      <div
-                        key={lay.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectLayer(lay.id);
-                        }}
-                        className={`absolute z-30 text-center cursor-pointer select-none leading-none ${
-                          selectedLayerId === lay.id ? "outline-2 outline-dashed outline-[#d200c1]" : ""
-                        }`}
-                        style={{
-                          left: "50%",
-                          top: "50%",
-                          transform: `translate(-50%, -50%) translate(${lay.x}px, ${lay.y}px) rotate(${lay.rotation}deg)`,
-                          fontSize: `${lay.size}px`,
-                        }}
-                      >
-                        {lay.content}
-                      </div>
-                    );
-                  }
+                if (lay.type === "sticker") {
+                  return (
+                    <div
+                      key={lay.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectLayer(lay.id);
+                      }}
+                      className={`absolute z-30 text-center cursor-pointer select-none leading-none ${
+                        selectedLayerId === lay.id ? "outline-2 outline-dashed outline-[#d200c1]" : ""
+                      }`}
+                      style={{
+                        left: "50%",
+                        top: "50%",
+                        transform: `translate(-50%, -50%) translate(${lay.x}px, ${lay.y}px) rotate(${lay.rotation}deg)`,
+                        fontSize: `${lay.size}px`,
+                      }}
+                    >
+                      {lay.content}
+                    </div>
+                  );
+                }
 
-                  return null;
-                })}
-              </div>
+                return null;
+              })}
 
+              {/* Canvas CRT Filter overlay */}
+              {enhanced && (
+                <>
+                  <div className="absolute inset-0 pointer-events-none z-10 crt-screen crt-flicker bg-opacity-10 bg-secondary/5" />
+                  <div className="animate-scanline" />
+                </>
+              )}
             </div>
           </RetroWindow>
 
-          {/* AI Helper Actions Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+          {/* AI buttons on desktop */}
+          <div className="hidden lg:grid grid-cols-4 gap-2.5">
             <PixelButton variant="white" size="sm" className="text-xs! py-1.5" onClick={handleAIGenerateCaption}>
               💬 AI CAPTION
             </PixelButton>
@@ -602,8 +606,170 @@ export default function MemeStudioPage() {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Properties Panel (lg:col-span-3) */}
-        <div className="lg:col-span-3 flex flex-col gap-6">
+        {/* MOBILE CONTROL TABS (Visible only below lg) */}
+        <div className="lg:hidden flex flex-wrap gap-1 order-2 border-b-4 border-black pb-2.5 mt-2">
+          {["TOOLS", "LAYERS", "PROPERTIES", "AI"].map((t) => (
+            <button
+              key={t}
+              onClick={() => setMobileTab(t.toLowerCase() as any)}
+              className={`flex-1 memphis-border-2 py-1.5 font-bangers text-base tracking-wider ${
+                mobileTab === t.toLowerCase() ? "bg-[#ffe400] text-black shadow-[2px_2px_0px_#000]" : "bg-white"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {/* LEFT COLUMN: Tool Panel & Layers (lg:col-span-3, order-3 on mobile) */}
+        <div className={`lg:col-span-3 lg:order-1 flex flex-col gap-6 order-3 ${
+          mobileTab === "tools" || mobileTab === "layers" ? "flex" : "hidden lg:flex"
+        }`}>
+          {/* Design Tools panel */}
+          <div className={mobileTab === "tools" || !mobileTab ? "block" : "hidden lg:block"}>
+            <RetroWindow title="DESIGN TOOLS" headerBg="bg-primary-container" showDots={false}>
+              <div className="p-4 bg-white flex flex-col gap-4">
+                {/* Element triggers */}
+                <div>
+                  <span className="font-mono text-[10px] font-bold text-black/60 uppercase block mb-2">ADD ELEMENT:</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <PixelButton variant="white" size="sm" className="text-sm! py-1.5" onClick={handleAddText}>
+                      ➕ ADD TEXT
+                    </PixelButton>
+                    <div className="relative group">
+                      <PixelButton variant="white" size="sm" className="w-full text-sm! py-1.5">
+                        ➕ STICKER
+                      </PixelButton>
+                      <div className="absolute top-full left-0 right-0 bg-white memphis-border-2 p-1.5 hidden group-hover:grid grid-cols-3 gap-1 z-30 shadow-md">
+                        {STICKERS.map((st) => (
+                          <button
+                            key={st.name}
+                            type="button"
+                            onClick={() => handleAddSticker(st.emoji)}
+                            className="hover:bg-[#ffe400] text-center text-lg p-1"
+                          >
+                            {st.emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Camera snapshot controls */}
+                <div>
+                  <span className="font-mono text-[10px] font-bold text-black/60 uppercase block mb-2">📸 CAMERA CAPTURE:</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <PixelButton variant="primary" size="sm" className="text-xs! py-1.5" onClick={startCamera}>
+                      📷 WEBCAM
+                    </PixelButton>
+                    <label className="flex">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleCameraFileInput}
+                        className="hidden"
+                      />
+                      <span className="w-full font-bangers uppercase tracking-wider memphis-border memphis-shadow-sm select-none active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all duration-75 inline-flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:pointer-events-none text-xs bg-[#b4ebff] text-black hover:bg-[#cbf1ff] px-2 py-1.5">
+                        📷 CAMERA
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Background patterns */}
+                <div>
+                  <span className="font-mono text-[10px] font-bold text-black/60 uppercase block mb-2">BACKGROUND PATTERN:</span>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {PATTERNS.map((p, idx) => (
+                      <button
+                        key={p.name}
+                        onClick={() => handleSelectPattern(p, idx)}
+                        className={`h-9 border-2 border-black relative transition-all bg-cover bg-center ${
+                          activePatternIdx === idx ? "scale-105 border-[#d200c1]" : "opacity-75 hover:opacity-100"
+                        }`}
+                        style={{ backgroundImage: `url(${p.value})` }}
+                        title={p.name}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Mascots Selector */}
+                <div>
+                  <span className="font-mono text-[10px] font-bold text-black/60 uppercase block mb-2">CLAN MASCOT:</span>
+                  <div className="flex gap-2">
+                    {TEMPLATE_MASCOTS.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => handleSelectMascot(m)}
+                        className={`w-9 h-9 border-2 border-black rounded-full overflow-hidden relative bg-white transition-all ${
+                          activeMascotId === m.id ? "scale-110 border-[#ffe400] ring-2 ring-black" : "opacity-70 hover:opacity-100"
+                        }`}
+                        title={m.name}
+                      >
+                        <Image src={m.image} alt={m.name} fill className="object-contain p-0.5" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </RetroWindow>
+          </div>
+
+          {/* Layers List Panel */}
+          <div className={mobileTab === "layers" || !mobileTab ? "block" : "hidden lg:block"}>
+            <RetroWindow title="LAYERS PANEL" headerBg="bg-secondary" className="memphis-shadow-pink">
+              <div className="bg-white p-3 divide-y-2 divide-black/10 max-h-52 overflow-y-auto scrollbar-thin flex flex-col">
+                {layers.map((lay) => (
+                  <div
+                    key={lay.id}
+                    onClick={() => handleSelectLayer(lay.id)}
+                    className={`flex items-center justify-between py-2 px-1 cursor-pointer hover:bg-zinc-50 ${
+                      selectedLayerId === lay.id ? "bg-[#ffe400]/30 border border-black border-dashed" : ""
+                    }`}
+                  >
+                    <span className="font-mono text-xs font-bold truncate max-w-[140px] uppercase">
+                      {lay.type === "text" ? "📝" : lay.type === "sticker" ? "🕶️" : "🖼️"}{" "}
+                      {lay.name}
+                    </span>
+                    
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleVisibility(lay.id);
+                        }}
+                        className="text-xs hover:bg-[#b4ebff] p-0.5"
+                      >
+                        {lay.visible ? "👁️" : "🙈"}
+                      </button>
+                      {lay.id !== "mascot-layer" && lay.id !== "bg-layer" && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteLayer(lay.id);
+                          }}
+                          className="text-xs text-live-red hover:bg-red-50 p-0.5"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </RetroWindow>
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Properties Panel (lg:col-span-3, order-4 on mobile) */}
+        <div className={`lg:col-span-3 lg:order-3 flex flex-col gap-6 order-4 ${
+          mobileTab === "properties" ? "flex" : "hidden lg:flex"
+        }`}>
           <RetroWindow title="PROPERTIES" headerBg="bg-[#ffe400]">
             <div className="p-4 bg-white flex flex-col gap-4 font-mono text-xs">
               {activeLayer ? (
@@ -615,7 +781,6 @@ export default function MemeStudioPage() {
                     </p>
                   </div>
 
-                  {/* Content Editor */}
                   {activeLayer.type === "text" && (
                     <div>
                       <label className="font-bold block mb-1">TEXT CONTENT:</label>
@@ -628,7 +793,6 @@ export default function MemeStudioPage() {
                     </div>
                   )}
 
-                  {/* Size Adjustment */}
                   {activeLayer.size !== undefined && (
                     <div>
                       <div className="flex justify-between font-bold mb-1">
@@ -646,7 +810,6 @@ export default function MemeStudioPage() {
                     </div>
                   )}
 
-                  {/* Rotation Adjustment */}
                   {activeLayer.rotation !== undefined && (
                     <div>
                       <div className="flex justify-between font-bold mb-1">
@@ -664,7 +827,6 @@ export default function MemeStudioPage() {
                     </div>
                   )}
 
-                  {/* Position X Offset */}
                   {activeLayer.x !== undefined && (
                     <div>
                       <div className="flex justify-between font-bold mb-1">
@@ -682,7 +844,6 @@ export default function MemeStudioPage() {
                     </div>
                   )}
 
-                  {/* Position Y Offset */}
                   {activeLayer.y !== undefined && (
                     <div>
                       <div className="flex justify-between font-bold mb-1">
@@ -700,7 +861,6 @@ export default function MemeStudioPage() {
                     </div>
                   )}
 
-                  {/* Text Color (only for text types) */}
                   {activeLayer.type === "text" && (
                     <div>
                       <label className="font-bold block mb-1">TEXT COLOR:</label>
@@ -728,6 +888,37 @@ export default function MemeStudioPage() {
           </RetroWindow>
         </div>
 
+        {/* MOBILE AI BUTTONS (order-5 on mobile, visible under AI tab) */}
+        <div className={`lg:hidden order-5 flex flex-col gap-2.5 mt-2 ${
+          mobileTab === "ai" ? "flex" : "hidden"
+        }`}>
+          <div className="grid grid-cols-2 gap-2.5">
+            <PixelButton variant="white" size="sm" className="text-xs! py-1.5" onClick={handleAIGenerateCaption}>
+              💬 AI CAPTION
+            </PixelButton>
+            <PixelButton variant="white" size="sm" className="text-xs! py-1.5" onClick={handleAIGenerateRoast}>
+              🔥 AI ROAST
+            </PixelButton>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5">
+            <PixelButton
+              variant={bgRemoved ? "primary" : "white"}
+              size="sm"
+              className="text-xs! py-1.5"
+              onClick={() => setBgRemoved(!bgRemoved)}
+            >
+              ✂️ BG REMOVE
+            </PixelButton>
+            <PixelButton
+              variant={enhanced ? "secondary" : "white"}
+              size="sm"
+              className="text-xs! py-1.5"
+              onClick={() => setEnhanced(!enhanced)}
+            >
+              📺 CRT ENHANCE
+            </PixelButton>
+          </div>
+        </div>
       </main>
     </div>
   );
