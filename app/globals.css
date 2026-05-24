@@ -1,26 +1,204 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-russo: var(--font-russo), sans-serif;
+  --font-bangers: var(--font-bangers), cursive;
+  --font-inter: var(--font-inter), sans-serif;
+
+  --color-surface: #ffffff;
+  --color-surface-dim: #e0dac7;
+  --color-surface-bright: #fff9ea;
+  --color-surface-container: #f4eeda;
+  --color-surface-container-high: #eee8d4;
+  --color-surface-container-highest: #e9e2cf;
+  --color-on-surface: #000000;
+  --color-on-surface-variant: #4b4731;
+  --color-primary: #6b5f00;
+  --color-primary-container: #ffe400;
+  --color-secondary: #a8009a;
+  --color-secondary-container: #d200c1;
+  --color-tertiary: #00677e;
+  --color-tertiary-container: #b4ebff;
+  
+  --color-live-red: #dc2626;
+  --color-csk-yellow: #facc15;
+  --color-rcb-red: #dc2626;
+  --color-mi-blue: #1d4ed8;
+  --color-kkr-purple: #581c87;
+  --color-srh-orange: #f97316;
+  --color-gt-teal: #0f766e;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* Base resets & typography */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter);
+  background-color: #fff9ea;
+  color: #000000;
+  overflow-x: hidden;
 }
+
+/* Memphis & Brutalist custom utilities */
+.memphis-border {
+  border: 4px solid #000000;
+}
+
+.memphis-border-2 {
+  border: 2px solid #000000;
+}
+
+.memphis-shadow {
+  box-shadow: 12px 12px 0px 0px #000000;
+}
+
+.memphis-shadow-sm {
+  box-shadow: 6px 6px 0px 0px #000000;
+}
+
+.memphis-shadow-pink {
+  box-shadow: 8px 8px 0px 0px #d200c1;
+}
+
+.memphis-shadow-yellow {
+  box-shadow: 8px 8px 0px 0px #ffe400;
+}
+
+.memphis-shadow-cyan {
+  box-shadow: 8px 8px 0px 0px #b4ebff;
+}
+
+/* Polka dot backgrounds */
+.bg-polka {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.08) 1.5px, transparent 1.5px);
+  background-size: 16px 16px;
+}
+
+.bg-polka-pink {
+  background-image: radial-gradient(rgba(210, 0, 193, 0.1) 1.5px, transparent 1.5px);
+  background-size: 16px 16px;
+}
+
+.bg-polka-yellow {
+  background-image: radial-gradient(rgba(107, 95, 0, 0.1) 1.5px, transparent 1.5px);
+  background-size: 16px 16px;
+}
+
+/* 3D text layers */
+.text-3d-yellow {
+  text-shadow: 2px 2px 0px #000000, 4px 4px 0px #ffe400;
+}
+
+.text-3d-pink {
+  text-shadow: 2px 2px 0px #000000, 4px 4px 0px #d200c1;
+}
+
+.text-3d-cyan {
+  text-shadow: 2px 2px 0px #000000, 4px 4px 0px #b4ebff;
+}
+
+.text-3d-black {
+  text-shadow: 2px 2px 0px #ffffff, 4px 4px 0px #000000;
+}
+
+/* CRT Screen FX */
+.crt-screen {
+  position: relative;
+  overflow: hidden;
+}
+
+.crt-screen::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), 
+              linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+  z-index: 10;
+  background-size: 100% 3px, 3px 100%;
+  pointer-events: none;
+}
+
+/* Animations */
+@keyframes float {
+  0% { transform: translateY(0px) rotate(-2deg); }
+  50% { transform: translateY(-8px) rotate(2deg); }
+  100% { transform: translateY(0px) rotate(-2deg); }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+@keyframes float-reverse {
+  0% { transform: translateY(0px) rotate(3deg); }
+  50% { transform: translateY(-6px) rotate(-1deg); }
+  100% { transform: translateY(0px) rotate(3deg); }
+}
+
+.animate-float-reverse {
+  animation: float-reverse 4.5s ease-in-out infinite;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: marquee 20s linear infinite;
+}
+
+.animate-marquee-slow {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: marquee 35s linear infinite;
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.animate-scanline {
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  animation: scanline 8s linear infinite;
+  pointer-events: none;
+  z-index: 11;
+}
+
+/* Neon Glows */
+.neon-glow-pink {
+  box-shadow: 0 0 10px rgba(210, 0, 193, 0.5), 0 0 20px rgba(210, 0, 193, 0.2);
+}
+
+.neon-glow-yellow {
+  box-shadow: 0 0 10px rgba(254, 227, 0, 0.5), 0 0 20px rgba(254, 227, 0, 0.2);
+}
+
+.neon-glow-cyan {
+  box-shadow: 0 0 10px rgba(180, 235, 255, 0.6), 0 0 20px rgba(180, 235, 255, 0.3);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f4eeda;
+  border-left: 4px solid #000000;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #ffe400;
+  border: 4px solid #000000;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #d200c1;
+}
+
